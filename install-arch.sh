@@ -162,6 +162,13 @@ apply_dark_theme_best_effort() {
 
 backup_if_conflict() {
   local target="$1"
+  # If the target resolves inside this repo (e.g. ~/.config/hypr is already symlinked to dotfiles),
+  # never move it aside.
+  local resolved=""
+  resolved="$(readlink -f -- "$target" 2>/dev/null || true)"
+  if [[ -n "$resolved" && "$resolved" == "$repo_root/dotfiles/"* ]]; then
+    return 0
+  fi
   # If the target exists and is not a symlink, stow will refuse. Back it up.
   if [[ -e "$target" && ! -L "$target" ]]; then
     local ts
@@ -333,6 +340,7 @@ if $do_stow; then
   run chmod +x "$repo_root/dotfiles/.local/bin/eink-notify"
   run chmod +x "$repo_root/dotfiles/.local/bin/eink-ws"
   run chmod +x "$repo_root/dotfiles/.local/bin/discord-tray"
+  run chmod +x "$repo_root/dotfiles/.local/bin/eink-sleep"
   # Quickshell QML files are loaded directly; no chmod needed.
 
   if ! have_cmd stow; then

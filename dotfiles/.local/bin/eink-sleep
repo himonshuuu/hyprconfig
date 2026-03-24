@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Manual suspend: trigger a logind lock first so hypridle can inhibit sleep until the session is locked.
+# Fall back to hyprlock if logind isn't available.
+if command -v loginctl >/dev/null 2>&1; then
+  loginctl lock-session >/dev/null 2>&1 || true
+elif command -v hyprlock >/dev/null 2>&1; then
+  hyprlock >/dev/null 2>&1 || true
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  exec systemctl suspend
+fi
+
+if command -v loginctl >/dev/null 2>&1; then
+  exec loginctl suspend
+fi
+
+echo "eink-sleep: no suspend command found (systemctl/loginctl)" >&2
+exit 1

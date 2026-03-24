@@ -257,6 +257,76 @@ Item {
                             spacing: 10
 
                             Text {
+                                text: "Time format"
+                                color: root.theme.text
+                                font.family: root.theme.fontFamily
+                                font.pixelSize: 12
+                                Layout.fillWidth: true
+                            }
+
+                            Rectangle {
+                                width: 140
+                                height: 30
+                                radius: 12
+                                color: Qt.rgba(root.theme.surfaceAlt.r, root.theme.surfaceAlt.g, root.theme.surfaceAlt.b, 0.75)
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 3
+                                    spacing: 3
+
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 24
+                                        radius: 10
+                                        color: !root.settings.time24h
+                                            ? Qt.rgba(root.theme.accent.r, root.theme.accent.g, root.theme.accent.b, 0.92)
+                                            : "transparent"
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.settings.save(({ time24h: false }))
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "12h"
+                                            color: !root.settings.time24h ? root.theme.onAccent : root.theme.text
+                                            font.family: root.theme.fontFamily
+                                            font.pixelSize: 11
+                                            font.weight: Font.DemiBold
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 24
+                                        radius: 10
+                                        color: root.settings.time24h
+                                            ? Qt.rgba(root.theme.accent.r, root.theme.accent.g, root.theme.accent.b, 0.92)
+                                            : "transparent"
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.settings.save(({ time24h: true }))
+                                        }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "24h"
+                                            color: root.settings.time24h ? root.theme.onAccent : root.theme.text
+                                            font.family: root.theme.fontFamily
+                                            font.pixelSize: 11
+                                            font.weight: Font.DemiBold
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            Text {
                                 text: "Horizontal padding"
                                 color: root.theme.text
                                 font.family: root.theme.fontFamily

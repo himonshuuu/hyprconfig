@@ -80,6 +80,8 @@ Item {
     // `-1` means "auto" (treated as 0px by default).
     property int pillHPadding: Math.max(-1, Math.round(n("pillHPadding", -1)))
     property real pillOpacity: Math.max(0.15, Math.min(1.0, n("pillOpacity", 1.0)))
+    // Clock
+    property bool time24h: b("time24h", true)
 
     // Popup spacing
     property int popupGap: Math.max(0, Math.round(n("popupGap", 10)))

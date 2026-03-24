@@ -110,10 +110,10 @@ Item {
                     ({
                         symbol: String.fromCodePoint(0xF055E), fallbackSymbol: "bedtime", label: "Sleep",
                         command:
-                            // systemctl is most common; loginctl works on some setups too.
-                            "if command -v systemctl >/dev/null 2>&1; then systemctl suspend; " +
-                            "elif command -v loginctl >/dev/null 2>&1; then loginctl suspend; " +
-                            "fi"
+                            // Always lock before suspend, even for "manual" sleep.
+                            "if command -v $HOME/.local/bin/eink-sleep >/dev/null 2>&1; then $HOME/.local/bin/eink-sleep; " +
+                            "elif command -v hyprlock >/dev/null 2>&1; then hyprlock; systemctl suspend; " +
+                            "else systemctl suspend; fi"
                     }),
                     ({ symbol: String.fromCodePoint(0xF0709), fallbackSymbol: "refresh", label: "Restart", command: "systemctl reboot" }),
                     ({ symbol: String.fromCodePoint(0xF0425), fallbackSymbol: "power_settings_new", label: "Power Off", command: "systemctl poweroff" }),

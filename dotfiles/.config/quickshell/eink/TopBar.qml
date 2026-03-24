@@ -702,7 +702,9 @@ Item {
 
                     // Time
                     Text {
-                        text: Qt.formatTime(clock.date, "hh:mm")
+                        text: settings.time24h
+                            ? Qt.formatTime(clock.date, "HH:mm")
+                            : Qt.formatTime(clock.date, "hh:mm ap")
                         color: theme.text
                         font.family: theme.fontFamily
                         font.pixelSize: 12
