@@ -14,6 +14,14 @@ Item {
     property string activeSsid: ""
     property var networks: ([] ) // array<{ ssid: string, signal: int, security: string, active: bool }>
 
+    property bool passwordOpen: false
+    property string passwordSsid: ""
+    property string passwordValue: ""
+    property string passwordError: ""
+
+    property bool busyOpen: false
+    property string busyLabel: ""
+
     implicitWidth: 520
     implicitHeight: 320
 
@@ -43,20 +51,21 @@ Item {
         cmd.running = true
     }
 
-    function refresh() {
-        // Single command to avoid overlapping Process calls.
-        const script =
-            "if ! command -v nmcli >/dev/null 2>&1; then echo '__NO_NMCLI__'; exit 0; fi\n" +
-            "echo \"WIFI_ON=$(nmcli radio wifi 2>/dev/null | tr '[:upper:]' '[:lower:]')\"\n" +
-            "echo \"WIFI_DEV=$(nmcli -t -f DEVICE,TYPE device status 2>/dev/null | awk -F: '$2==\\\"wifi\\\"{print $1; exit}')\"\n" +
-            "echo \"ACTIVE_SSID=$(nmcli -t -f ACTIVE,SSID dev wifi 2>/dev/null | awk -F: '$1==\\\"yes\\\"{print $2; exit}')\"\n" +
-            "echo '__NETWORKS__'\n" +
-            "nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY device wifi list --rescan yes 2>/dev/null || true\n"
+	    function refresh(doRescan, done) {
+	        // Single command to avoid overlapping Process calls.
+	        const rescan = (doRescan === true) ? "yes" : "no"
+	        const script =
+	            "if ! command -v nmcli >/dev/null 2>&1; then echo '__NO_NMCLI__'; exit 0; fi\n" +
+	            "echo \"WIFI_ON=$(nmcli radio wifi 2>/dev/null | tr '[:upper:]' '[:lower:]')\"\n" +
+	            "echo \"WIFI_DEV=$(nmcli -t -f DEVICE,TYPE device status 2>/dev/null | awk -F: '$2==\\\"wifi\\\"{print $1; exit}')\"\n" +
+	            "echo \"ACTIVE_SSID=$(nmcli -t -f ACTIVE,SSID dev wifi 2>/dev/null | awk -F: '$1==\\\"yes\\\"{print $2; exit}')\"\n" +
+	            "echo '__NETWORKS__'\n" +
+	            ("nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY device wifi list --rescan " + rescan + " 2>/dev/null || true\n")
 
-        root.execSh(script, function(code, stdout) {
-            const raw = (stdout ?? "").trim()
-            if (raw.indexOf("__NO_NMCLI__") !== -1) {
-                root.haveNmcli = false
+	        root.execSh(script, function(code, stdout) {
+	            const raw = (stdout ?? "").trim()
+	            if (raw.indexOf("__NO_NMCLI__") !== -1) {
+	                root.haveNmcli = false
                 root.wifiOn = false
                 root.wifiDevice = ""
                 root.activeSsid = ""
@@ -97,12 +106,65 @@ Item {
                 const security = parts.slice(3).join(":")
                 list.push({ ssid, signal: isFinite(sig) ? sig : 0, security, active: inUse })
             }
-            list.sort((a, b) => (b.active - a.active) || (b.signal - a.signal) || a.ssid.localeCompare(b.ssid))
-            root.networks = list
-        })
-    }
+	            list.sort((a, b) => (b.active - a.active) || (b.signal - a.signal) || a.ssid.localeCompare(b.ssid))
+	            root.networks = list
+	            if (done) done()
+	        })
+	    }
 
-    Component.onCompleted: refresh()
+	    function rescan() {
+	        if (!root.haveNmcli) return
+	        root.busyLabel = "Scanning…"
+	        root.busyOpen = true
+	        root.refresh(true, function() { root.busyOpen = false; root.busyLabel = "" })
+	    }
+
+	    function connect(ssid, password) {
+	        if (!root.haveNmcli) return
+	        root.busyLabel = "Connecting…"
+	        root.busyOpen = true
+	        const ssidArg = JSON.stringify(ssid)
+	        const pw = (password ?? "")
+	        const cmd =
+	            (pw.length > 0)
+	                ? ("LANG=C nmcli -w 15 dev wifi connect " + ssidArg + " password " + JSON.stringify(pw))
+	                : ("LANG=C nmcli -w 15 dev wifi connect " + ssidArg)
+	        root.execSh(cmd, function(code, outText, errText) {
+	            root.busyOpen = false
+	            root.busyLabel = ""
+	            const outLower = ((outText ?? "").trim()).toLowerCase()
+	            const errLower = ((errText ?? "").trim()).toLowerCase()
+	            const combined = (outLower + "\n" + errLower).trim()
+	            // If nmcli needs secrets, prompt for password instead of failing silently.
+	            if (pw.length === 0 && (
+	                combined.indexOf("secrets") !== -1 ||
+	                combined.indexOf("password") !== -1 ||
+	                combined.indexOf("802-11-wireless-security") !== -1 ||
+	                combined.indexOf("need a password") !== -1 ||
+	                combined.indexOf("requires a password") !== -1
+	            )) {
+	                root.passwordSsid = ssid
+	                root.passwordValue = ""
+	                root.passwordError = ""
+	                root.passwordOpen = true
+	                return
+	            }
+
+	            // If a password was provided but connect still failed, surface a short error.
+	            if (pw.length > 0 && code !== 0) {
+	                root.passwordError = (errText ?? outText ?? "").trim()
+	                root.passwordOpen = true
+	                return
+	            }
+
+	            root.passwordOpen = false
+	            root.passwordValue = ""
+	            root.passwordError = ""
+	            root.refresh(true)
+	        })
+	    }
+
+	    Component.onCompleted: refresh(false)
 
 	    Rectangle {
 	        anchors.fill: parent
@@ -187,12 +249,12 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (!root.haveNmcli) return
-                        root.execSh(root.wifiOn ? "nmcli radio wifi off" : "nmcli radio wifi on", function() { root.refresh() })
-                    }
-                }
-            }
+	                    onClicked: {
+	                        if (!root.haveNmcli) return
+	                        root.execSh(root.wifiOn ? "nmcli radio wifi off" : "nmcli radio wifi on", function() { root.refresh(true) })
+	                    }
+	                }
+	            }
 
             Rectangle {
                 width: 92
@@ -210,13 +272,13 @@ Item {
                     font.weight: Font.DemiBold
                 }
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.refresh()
-                }
-            }
-        }
+	                MouseArea {
+	                    anchors.fill: parent
+	                    cursorShape: Qt.PointingHandCursor
+	                    onClicked: root.rescan()
+	                }
+	            }
+	        }
 
         Rectangle {
             Layout.fillWidth: true
@@ -247,12 +309,12 @@ Item {
 	                    ? Qt.rgba(root.theme.accent.r, root.theme.accent.g, root.theme.accent.b, 0.35)
 	                    : "transparent"
 
-	                MouseArea {
-	                    id: hover
-	                    anchors.fill: parent
-	                    hoverEnabled: true
-	                    acceptedButtons: Qt.NoButton
-	                }
+		                MouseArea {
+		                    id: hover
+		                    anchors.fill: parent
+		                    hoverEnabled: true
+		                    acceptedButtons: Qt.NoButton
+		                }
 
 	                RowLayout {
 	                    anchors.fill: parent
@@ -310,11 +372,11 @@ Item {
 		                            font.weight: Font.DemiBold
 		                        }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: root.haveNmcli && root.wifiOn
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
+	                        MouseArea {
+	                            anchors.fill: parent
+	                            enabled: root.haveNmcli && root.wifiOn
+	                            cursorShape: Qt.PointingHandCursor
+	                            onClicked: {
                                 if (!root.haveNmcli) return
                                 if (parent.active) {
                                     if (root.wifiDevice.length) {
@@ -322,16 +384,225 @@ Item {
                                     } else {
                                         root.execSh("nmcli networking off; nmcli networking on", function() { root.refresh() })
                                     }
-                                    return
-                                }
-                                // Connect to SSID (may prompt in terminal if password needed; works for open/known nets).
-                                const ssid = modelData.ssid
-                                root.execSh("nmcli dev wifi connect " + JSON.stringify(ssid) + " 2>/dev/null || true", function() { root.refresh() })
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+	                                    return
+	                                }
+	                                const ssid = modelData.ssid
+	                                root.connect(ssid, "")
+	                            }
+	                        }
+	                    }
+	                }
+	            }
+	        }
+
+	        // Password prompt overlay
+	        Item {
+	            anchors.fill: parent
+	            visible: root.passwordOpen
+	            z: 100
+	            onVisibleChanged: if (visible) pwInput.forceActiveFocus()
+
+	            Rectangle {
+	                anchors.fill: parent
+	                color: Qt.rgba(0, 0, 0, 0.45)
+	                MouseArea {
+	                    anchors.fill: parent
+	                    onClicked: {
+	                        root.passwordOpen = false
+	                        root.passwordValue = ""
+	                        root.passwordError = ""
+	                    }
+	                }
+	            }
+
+	            Rectangle {
+	                width: Math.min(parent.width - 40, 420)
+	                implicitHeight: Math.round(col.implicitHeight + 22)
+	                radius: 18
+	                anchors.centerIn: parent
+	                color: Qt.rgba(root.theme.surfaceAlt.r, root.theme.surfaceAlt.g, root.theme.surfaceAlt.b, 0.98)
+	                border.width: 1
+	                border.color: Qt.rgba(root.theme.outline.r, root.theme.outline.g, root.theme.outline.b, 0.35)
+
+	                Keys.onEscapePressed: {
+	                    root.passwordOpen = false
+	                    root.passwordValue = ""
+	                    root.passwordError = ""
+	                }
+
+	                ColumnLayout {
+	                    id: col
+	                    anchors.fill: parent
+	                    anchors.margins: 14
+	                    spacing: 10
+
+	                    Text {
+	                        text: "Connect to Wi‑Fi"
+	                        color: root.theme.text
+	                        font.family: root.theme.fontFamily
+	                        font.pixelSize: 13
+	                        font.weight: Font.DemiBold
+	                        Layout.fillWidth: true
+	                    }
+
+	                    Text {
+	                        text: root.passwordSsid.length ? root.passwordSsid : "Network"
+	                        color: root.theme.textMuted
+	                        font.family: root.theme.fontFamily
+	                        font.pixelSize: 12
+	                        elide: Text.ElideRight
+	                        Layout.fillWidth: true
+	                    }
+
+	                    Rectangle {
+	                        Layout.fillWidth: true
+	                        height: 36
+	                        radius: 14
+	                        color: Qt.rgba(root.theme.surface.r, root.theme.surface.g, root.theme.surface.b, 0.55)
+	                        border.width: 1
+	                        border.color: Qt.rgba(root.theme.outline.r, root.theme.outline.g, root.theme.outline.b, 0.28)
+
+	                        TextInput {
+	                            id: pwInput
+	                            anchors.fill: parent
+	                            anchors.margins: 10
+	                            color: root.theme.text
+	                            selectionColor: Qt.rgba(root.theme.accent.r, root.theme.accent.g, root.theme.accent.b, 0.5)
+	                            selectedTextColor: root.theme.onAccent
+	                            font.family: root.theme.fontFamily
+	                            font.pixelSize: 12
+	                            echoMode: TextInput.Password
+	                            inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
+	                            text: root.passwordValue
+	                            onTextChanged: root.passwordValue = text
+	                            focus: true
+	                            Keys.onReturnPressed: connectBtn.clicked()
+	                            Keys.onEnterPressed: connectBtn.clicked()
+	                        }
+	                    }
+
+	                    Text {
+	                        visible: root.passwordError.length > 0
+	                        text: root.passwordError
+	                        color: Qt.rgba(1, 0.4, 0.4, 1)
+	                        font.family: root.theme.fontFamily
+	                        font.pixelSize: 11
+	                        wrapMode: Text.Wrap
+	                        Layout.fillWidth: true
+	                    }
+
+	                    RowLayout {
+	                        Layout.fillWidth: true
+	                        spacing: 10
+
+	                        Rectangle {
+	                            Layout.fillWidth: true
+	                            height: 32
+	                            radius: 14
+	                            color: Qt.rgba(root.theme.surface.r, root.theme.surface.g, root.theme.surface.b, 0.55)
+	                            Text {
+	                                anchors.centerIn: parent
+	                                text: "Cancel"
+	                                color: root.theme.text
+	                                font.family: root.theme.fontFamily
+	                                font.pixelSize: 11
+	                                font.weight: Font.DemiBold
+	                            }
+	                            MouseArea {
+	                                anchors.fill: parent
+	                                cursorShape: Qt.PointingHandCursor
+	                                onClicked: {
+	                                    root.passwordOpen = false
+	                                    root.passwordValue = ""
+	                                    root.passwordError = ""
+	                                }
+	                            }
+	                        }
+
+	                        Rectangle {
+	                            id: connectBtn
+	                            Layout.fillWidth: true
+	                            height: 32
+	                            radius: 14
+	                            color: Qt.rgba(root.theme.accent.r, root.theme.accent.g, root.theme.accent.b, 0.92)
+	                            Text {
+	                                anchors.centerIn: parent
+	                                text: "Connect"
+	                                color: root.theme.onAccent
+	                                font.family: root.theme.fontFamily
+	                                font.pixelSize: 11
+	                                font.weight: Font.DemiBold
+	                            }
+	                            property bool clicked: false
+	                            MouseArea {
+	                                anchors.fill: parent
+	                                cursorShape: Qt.PointingHandCursor
+	                                onClicked: connectBtn.clicked()
+	                            }
+	                            function clicked() {
+	                                if (!root.passwordSsid.length) return
+	                                root.passwordError = ""
+	                                root.connect(root.passwordSsid, root.passwordValue)
+	                            }
+	                        }
+	                    }
+	                }
+	            }
+	        }
+
+	        // Busy overlay (scanning / connecting)
+	        Item {
+	            anchors.fill: parent
+	            visible: root.busyOpen
+	            z: 110
+
+	            Rectangle {
+	                anchors.fill: parent
+	                color: Qt.rgba(0, 0, 0, 0.35)
+	            }
+
+	            Rectangle {
+	                width: Math.min(parent.width - 40, 340)
+	                height: 64
+	                radius: 18
+	                anchors.centerIn: parent
+	                color: Qt.rgba(root.theme.surfaceAlt.r, root.theme.surfaceAlt.g, root.theme.surfaceAlt.b, 0.98)
+	                border.width: 1
+	                border.color: Qt.rgba(root.theme.outline.r, root.theme.outline.g, root.theme.outline.b, 0.35)
+
+	                RowLayout {
+	                    anchors.fill: parent
+	                    anchors.margins: 14
+	                    spacing: 12
+
+	                    EinkSymbol {
+	                        symbol: String.fromCodePoint(0xF0A1B) // nf-md-refresh (good enough)
+	                        fallbackSymbol: "refresh"
+	                        fontFamily: root.theme.iconFontFamily
+	                        fontFamilyFallback: root.theme.iconFontFamilyFallback
+	                        color: root.theme.accent
+	                        size: 18
+	                        Layout.alignment: Qt.AlignVCenter
+	                        RotationAnimator on rotation {
+	                            running: root.busyOpen
+	                            from: 0
+	                            to: 360
+	                            duration: 900
+	                            loops: Animation.Infinite
+	                        }
+	                    }
+
+	                    Text {
+	                        text: root.busyLabel.length ? root.busyLabel : "Working…"
+	                        color: root.theme.text
+	                        font.family: root.theme.fontFamily
+	                        font.pixelSize: 12
+	                        font.weight: Font.DemiBold
+	                        Layout.fillWidth: true
+	                        Layout.alignment: Qt.AlignVCenter
+	                    }
+	                }
+	            }
+	        }
+	    }
+	}

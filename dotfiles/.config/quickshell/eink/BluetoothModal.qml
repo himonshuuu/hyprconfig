@@ -12,6 +12,9 @@ Item {
     property bool btPowered: false
     property var devices: ([] ) // array<{ mac: string, name: string, connected: bool }>
 
+    property bool busyOpen: false
+    property string busyLabel: ""
+
     implicitWidth: 520
     implicitHeight: 320
 
@@ -41,28 +44,30 @@ Item {
         cmd.running = true
     }
 
-    function refresh() {
-        // Single command to avoid overlapping Process calls.
-        const script =
-            "if ! command -v bluetoothctl >/dev/null 2>&1; then echo '__NO_BTCTL__'; exit 0; fi\n" +
-            "pwr=$(bluetoothctl show 2>/dev/null | awk -F': ' '/^\\s*Powered:/{print $2; exit}')\n" +
-            "echo \"POWERED=${pwr}\"\n" +
-            // Quick scan burst improves discovery for new devices
-            "bluetoothctl scan on >/dev/null 2>&1 || true\n" +
-            "sleep 4\n" +
-            "bluetoothctl scan off >/dev/null 2>&1 || true\n" +
-            "echo '__DEVICES__'\n" +
-            "bluetoothctl devices 2>/dev/null | awk '{mac=$2; $1=$2=\"\"; sub(/^  /, \"\"); print mac \"|\" $0}'\n"
+	    function refresh(doScan, done) {
+	        // Single command to avoid overlapping Process calls.
+	        const scan = (doScan === true)
+	        const script =
+	            "if ! command -v bluetoothctl >/dev/null 2>&1; then echo '__NO_BTCTL__'; exit 0; fi\n" +
+	            "pwr=$(bluetoothctl show 2>/dev/null | awk -F': ' '/^\\s*Powered:/{print $2; exit}')\n" +
+	            "echo \"POWERED=${pwr}\"\n" +
+	            // Optional scan burst for discovery
+	            (scan ? ("bluetoothctl scan on >/dev/null 2>&1 || true\n" +
+	            "sleep 6\n" +
+	            "bluetoothctl scan off >/dev/null 2>&1 || true\n") : "") +
+	            "echo '__DEVICES__'\n" +
+	            "bluetoothctl devices 2>/dev/null | awk '{mac=$2; $1=$2=\"\"; sub(/^  /, \"\"); print mac \"|\" $0}'\n"
 
-        root.execSh(script, function(code, stdout) {
-            const raw = (stdout ?? "").trim()
-            if (raw.indexOf("__NO_BTCTL__") !== -1) {
-                root.haveBluetoothctl = false
-                root.btPowered = false
-                root.devices = []
-                return
-            }
-            root.haveBluetoothctl = true
+	        root.execSh(script, function(code, stdout) {
+	            const raw = (stdout ?? "").trim()
+	            if (raw.indexOf("__NO_BTCTL__") !== -1) {
+	                root.haveBluetoothctl = false
+	                root.btPowered = false
+	                root.devices = []
+	                if (done) done()
+	                return
+	            }
+	            root.haveBluetoothctl = true
 
             const lines = raw.split("\n")
             let powered = ""
@@ -92,10 +97,11 @@ Item {
 
             // Fill connected state (fast; but one-by-one would be slow). Limit to first 12.
             const limit = Math.min(devs.length, 12)
-            if (limit === 0) {
-                root.devices = []
-                return
-            }
+	            if (limit === 0) {
+	                root.devices = []
+	                if (done) done()
+	                return
+	            }
 
             const infoScript =
                 "for mac in " + devs.slice(0, limit).map(d => d.mac).join(" ") + "; do " +
@@ -103,22 +109,23 @@ Item {
                 "  [ -z \"$c\" ] && c=no; " +
                 "  echo \"$mac|$c\"; " +
                 "done"
-            root.execSh(infoScript, function(code2, out2) {
-                const map = {}
-                const l2 = (out2 ?? "").split("\n").map(s => s.trim()).filter(Boolean)
+	            root.execSh(infoScript, function(code2, out2) {
+	                const map = {}
+	                const l2 = (out2 ?? "").split("\n").map(s => s.trim()).filter(Boolean)
                 for (const x of l2) {
                     const p2 = x.split("|")
                     if (p2.length < 2) continue
                     map[p2[0]] = (p2[1] ?? "").toLowerCase().indexOf("yes") !== -1
                 }
-                for (const d of devs) d.connected = !!map[d.mac]
-                devs.sort((a, b) => (b.connected - a.connected) || a.name.localeCompare(b.name))
-                root.devices = devs
-            })
-        })
-    }
+	                for (const d of devs) d.connected = !!map[d.mac]
+	                devs.sort((a, b) => (b.connected - a.connected) || a.name.localeCompare(b.name))
+	                root.devices = devs
+	                if (done) done()
+	            })
+	        })
+	    }
 
-    Component.onCompleted: refresh()
+	    Component.onCompleted: refresh(false)
 
 	    Rectangle {
 	        anchors.fill: parent
@@ -202,15 +209,19 @@ Item {
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
                 }
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (!root.haveBluetoothctl) return
-                        root.execSh(root.btPowered ? "bluetoothctl power off" : "bluetoothctl power on", function() { root.refresh() })
-                    }
-                }
-            }
+	                MouseArea {
+	                    anchors.fill: parent
+	                    cursorShape: Qt.PointingHandCursor
+	                    onClicked: {
+	                        if (!root.haveBluetoothctl) return
+	                        root.busyLabel = root.btPowered ? "Turning off…" : "Turning on…"
+	                        root.busyOpen = true
+	                        root.execSh(root.btPowered ? "bluetoothctl power off" : "bluetoothctl power on", function() {
+	                            root.refresh(false, function() { root.busyOpen = false; root.busyLabel = "" })
+	                        })
+	                    }
+	                }
+	            }
 
             Rectangle {
                 width: 92
@@ -228,16 +239,18 @@ Item {
                     font.weight: Font.DemiBold
                 }
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (!root.haveBluetoothctl) return
-                        root.refresh()
-                    }
-                }
-            }
-        }
+	                MouseArea {
+	                    anchors.fill: parent
+	                    cursorShape: Qt.PointingHandCursor
+	                    onClicked: {
+	                        if (!root.haveBluetoothctl) return
+	                        root.busyLabel = "Scanning…"
+	                        root.busyOpen = true
+	                        root.refresh(true, function() { root.busyOpen = false; root.busyLabel = "" })
+	                    }
+	                }
+	            }
+	        }
 
 	        ListView {
 	            Layout.fillWidth: true
@@ -317,21 +330,80 @@ Item {
                             font.weight: Font.DemiBold
                         }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: root.haveBluetoothctl && root.btPowered
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (!root.haveBluetoothctl) return
-                                const cmd = modelData.connected
-                                    ? ("bluetoothctl disconnect " + modelData.mac + " >/dev/null 2>&1 || true")
-                                    : ("bluetoothctl connect " + modelData.mac + " >/dev/null 2>&1 || true")
-                                root.execSh(cmd, function() { root.refresh() })
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+	                        MouseArea {
+	                            anchors.fill: parent
+	                            enabled: root.haveBluetoothctl && root.btPowered
+	                            cursorShape: Qt.PointingHandCursor
+	                            onClicked: {
+	                                if (!root.haveBluetoothctl) return
+	                                root.busyLabel = modelData.connected ? "Disconnecting…" : "Connecting…"
+	                                root.busyOpen = true
+	                                const cmd = modelData.connected
+	                                    ? ("bluetoothctl disconnect " + modelData.mac + " >/dev/null 2>&1 || true")
+	                                    : ("bluetoothctl connect " + modelData.mac + " >/dev/null 2>&1 || true")
+	                                root.execSh(cmd, function() {
+	                                    root.refresh(false, function() { root.busyOpen = false; root.busyLabel = "" })
+	                                })
+	                            }
+	                        }
+	                    }
+	                }
+	            }
+	        }
+
+	        // Busy overlay (scanning / connecting)
+	        Item {
+	            anchors.fill: parent
+	            visible: root.busyOpen
+	            z: 100
+
+	            Rectangle {
+	                anchors.fill: parent
+	                color: Qt.rgba(0, 0, 0, 0.35)
+	            }
+
+	            Rectangle {
+	                width: Math.min(parent.width - 40, 340)
+	                height: 64
+	                radius: 18
+	                anchors.centerIn: parent
+	                color: Qt.rgba(root.theme.surfaceAlt.r, root.theme.surfaceAlt.g, root.theme.surfaceAlt.b, 0.98)
+	                border.width: 1
+	                border.color: Qt.rgba(root.theme.outline.r, root.theme.outline.g, root.theme.outline.b, 0.35)
+
+	                RowLayout {
+	                    anchors.fill: parent
+	                    anchors.margins: 14
+	                    spacing: 12
+
+	                    EinkSymbol {
+	                        symbol: String.fromCodePoint(0xF0A1B) // nf-md-refresh
+	                        fallbackSymbol: "refresh"
+	                        fontFamily: root.theme.iconFontFamily
+	                        fontFamilyFallback: root.theme.iconFontFamilyFallback
+	                        color: root.theme.accent
+	                        size: 18
+	                        Layout.alignment: Qt.AlignVCenter
+	                        RotationAnimator on rotation {
+	                            running: root.busyOpen
+	                            from: 0
+	                            to: 360
+	                            duration: 900
+	                            loops: Animation.Infinite
+	                        }
+	                    }
+
+	                    Text {
+	                        text: root.busyLabel.length ? root.busyLabel : "Working…"
+	                        color: root.theme.text
+	                        font.family: root.theme.fontFamily
+	                        font.pixelSize: 12
+	                        font.weight: Font.DemiBold
+	                        Layout.fillWidth: true
+	                        Layout.alignment: Qt.AlignVCenter
+	                    }
+	                }
+	            }
+	        }
+	    }
+	}
