@@ -11,7 +11,11 @@
     }
   },
   "display": {
-    "separator": "  "
+    "separator": "   ",
+    "key": {
+      "type": "icon",
+      "width": 5
+    }
   },
   "modules": [
     {
@@ -22,13 +26,13 @@
       }
     },
     "separator",
-    "os",
-    "host",
-    "shell",
-    "terminal",
-    "wm",
-    "cpu",
-    "gpu",
-    "memory"
+    { "type": "os", "keyIcon": " " },
+    { "type": "host", "keyIcon": "󰌢 " },
+    { "type": "shell", "keyIcon": " " },
+    { "type": "terminal", "keyIcon": " " },
+    { "type": "wm", "keyIcon": " " },
+    { "type": "cpu", "keyIcon": " " },
+    { "type": "gpu", "keyIcon": "󰾲 " },
+    { "type": "memory", "keyIcon": " " }
   ]
 }
