@@ -94,25 +94,27 @@ Item {
                 }
             }
 
-            Repeater {
-                model: [
-                    ({
-                        symbol: String.fromCodePoint(0xF033E), fallbackSymbol: "lock", label: "Lock",
-                        command:
+	            Repeater {
+	                model: [
+	                    ({
+	                        symbol: String.fromCodePoint(0xF033E), fallbackSymbol: "lock", label: "Lock",
+	                        command:
                             // Prefer system session lock (works with logind/elogind); fall back to hyprlock.
                             "if command -v hyprlock >/dev/null 2>&1; then hyprlock; exit 0; fi; " +
                             "command -v loginctl >/dev/null 2>&1 && loginctl lock-session"
-                    }),
-                    ({
-                        symbol: String.fromCodePoint(0xF0A1B), fallbackSymbol: "monitor", label: "Screen Off",
-                        command: "hyprctl dispatch dpms off"
-                    }),
-                    ({
-                        symbol: String.fromCodePoint(0xF055E), fallbackSymbol: "bedtime", label: "Sleep",
-                        command:
-                            // Always lock before suspend, even for "manual" sleep.
-                            "if command -v $HOME/.local/bin/eink-sleep >/dev/null 2>&1; then $HOME/.local/bin/eink-sleep; " +
-                            "elif command -v hyprlock >/dev/null 2>&1; then hyprlock; systemctl suspend; " +
+	                    }),
+	                    ({
+	                        symbol: String.fromCodePoint(0xF0A1B), fallbackSymbol: "monitor", label: "Screen Off",
+	                        command: "hyprctl dispatch dpms off"
+	                    }),
+	                    ({
+	                        // Use Material Symbols ligature so the sleep icon matches the action.
+	                        useMaterial: true,
+	                        symbol: "bedtime", fallbackSymbol: "bedtime", label: "Sleep",
+	                        command:
+	                            // Always lock before suspend, even for "manual" sleep.
+	                            "if command -v $HOME/.local/bin/eink-sleep >/dev/null 2>&1; then $HOME/.local/bin/eink-sleep; " +
+	                            "elif command -v hyprlock >/dev/null 2>&1; then hyprlock; systemctl suspend; " +
                             "else systemctl suspend; fi"
                     }),
                     ({ symbol: String.fromCodePoint(0xF0709), fallbackSymbol: "refresh", label: "Restart", command: "systemctl reboot" }),
@@ -132,15 +134,15 @@ Item {
                         anchors.margins: 12
                         spacing: 10
 
-                        EinkSymbol {
-                            symbol: modelData.symbol
-                            fallbackSymbol: modelData.fallbackSymbol
-                            fontFamily: root.theme.iconFontFamily
-                            fontFamilyFallback: root.theme.iconFontFamilyFallback
-                            color: root.theme.text
-                            size: 18
-                            Layout.alignment: Qt.AlignVCenter
-                        }
+	                        EinkSymbol {
+	                            symbol: modelData.symbol
+	                            fallbackSymbol: modelData.fallbackSymbol
+	                            fontFamily: modelData.useMaterial ? "Material Symbols Rounded" : root.theme.iconFontFamily
+	                            fontFamilyFallback: modelData.useMaterial ? "Material Symbols Outlined" : root.theme.iconFontFamilyFallback
+	                            color: root.theme.text
+	                            size: 18
+	                            Layout.alignment: Qt.AlignVCenter
+	                        }
 
                         Text {
                             text: modelData.label
