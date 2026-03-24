@@ -11,10 +11,10 @@
     }
   },
   "display": {
-    "separator": "   ",
+    "separator": " ",
     "key": {
       "type": "icon",
-      "width": 5
+      "width": 3
     }
   },
   "modules": [
