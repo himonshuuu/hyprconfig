@@ -8,7 +8,7 @@ Usage:
   eink-wallpaper --restore
 
 What it does:
-  - sets wallpaper via swww (starts daemon if needed)
+  - sets wallpaper via awww (starts daemon if needed)
   - generates ~/.cache/quickshell/eink/colors.json via matugen
   - generates ~/.config/kitty/colors-eink.conf from matugen base16
 EOF
@@ -60,14 +60,14 @@ fi
 
 echo "$wallpaper_path" > "$wallpaper_file"
 
-if command -v swww >/dev/null 2>&1; then
-  if ! swww query >/dev/null 2>&1; then
-    (swww-daemon >/dev/null 2>&1 &) || true
+if command -v awww >/dev/null 2>&1; then
+  if ! awww query >/dev/null 2>&1; then
+    (awww-daemon >/dev/null 2>&1 &) || true
     sleep 0.2
   fi
 
   # Never abort theme generation if wallpaper setting fails.
-  swww img "$wallpaper_path" \
+  awww img "$wallpaper_path" \
     --transition-type grow \
     --transition-duration 0.9 \
     --transition-fps 60 \

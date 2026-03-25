@@ -290,12 +290,12 @@ if $do_packages; then
     rofi-wayland \
     cliphist \
     hyprlock \
-    hypridle \
-    ttf-nerd-fonts-symbols \
-    swww \
-    jq \
-    imagemagick \
-    libappindicator-gtk3
+	    hypridle \
+	    ttf-nerd-fonts-symbols \
+	    awww \
+	    jq \
+	    imagemagick \
+	    libappindicator-gtk3
 
   # GNOME/GTK apps (e.g. Nautilus) in non-GNOME sessions: portals help propagate dark preference.
   pacman_install \
