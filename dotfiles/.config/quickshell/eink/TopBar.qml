@@ -700,8 +700,8 @@ Item {
                 anchors.topMargin: settings.pillTopMargin
                 anchors.horizontalCenter: parent.horizontalCenter
 
-	                // Slightly lighter than pure black to match the theme.
-	                color: Qt.rgba(0.08, 0.08, 0.08, settings.pillOpacity)
+	                // Neutral dark grey (fixed).
+	                color: Qt.rgba(0.18, 0.18, 0.18, settings.pillOpacity)
                 border.width: 0
                 radius: 999
 
@@ -1010,30 +1010,30 @@ Item {
 	                            id: volumeRow
 	                            spacing: 8
 
-		                            EinkSymbol {
-		                                // Nerd Font Material Design:
-		                                //   nf-md-volume_off (f0581)
-		                                //   nf-md-volume_high (f057e)
-		                                symbol: root.muted ? String.fromCodePoint(0xF0581) : String.fromCodePoint(0xF057E)
-		                                fallbackSymbol: root.muted ? "volume_off" : "volume_up"
-		                                fallbackIconName: root.muted ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
-		                                fontFamily: theme.iconFontFamily
-		                                fontFamilyFallback: theme.iconFontFamilyFallback
-		                                color: theme.text
+	                            Text {
+	                                text: root.volumePct + "%"
+	                                color: theme.text
+	                                font.family: theme.fontFamily
+	                                font.pixelSize: 12
+	                                font.weight: Font.DemiBold
+	                                Layout.alignment: Qt.AlignVCenter
+	                            }
+
+	                            EinkSymbol {
+	                                // Nerd Font Material Design:
+	                                //   nf-md-volume_off (f0581)
+	                                //   nf-md-volume_high (f057e)
+	                                symbol: root.muted ? String.fromCodePoint(0xF0581) : String.fromCodePoint(0xF057E)
+	                                fallbackSymbol: root.muted ? "volume_off" : "volume_up"
+	                                fallbackIconName: root.muted ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
+	                                fontFamily: theme.iconFontFamily
+	                                fontFamilyFallback: theme.iconFontFamilyFallback
+	                                color: theme.text
 	                                size: 14
 	                                iconOpacity: 0.95
 	                                Layout.alignment: Qt.AlignVCenter
 	                            }
-
-                            Text {
-                                text: root.volumePct + "%"
-                                color: theme.text
-                                font.family: theme.fontFamily
-                                font.pixelSize: 12
-                                font.weight: Font.DemiBold
-                                Layout.alignment: Qt.AlignVCenter
-                            }
-                        }
+	                        }
 
                         MouseArea {
                             anchors.fill: parent
@@ -1078,31 +1078,31 @@ Item {
 	                            id: wifiRow
 	                            spacing: 8
 
-			                            EinkSymbol {
-			                                // Nerd Font Material Design: nf-md-wifi_strength_1 (f091f)
-			                                symbol: String.fromCodePoint(0xF091F)
-		                                fallbackSymbol: "wifi"
-		                                fallbackIconName: "network-wireless-signal-excellent-symbolic"
-		                                fontFamily: theme.iconFontFamily
-			                                fontFamilyFallback: theme.iconFontFamilyFallback
-			                                color: theme.text
-                                size: 14
-                                iconOpacity: 0.95
-                                Layout.alignment: Qt.AlignVCenter
-                            }
+	                            Text {
+	                                text: root.ssid
+	                                color: theme.text
+	                                font.family: theme.fontFamily
+	                                font.pixelSize: 12
+	                                font.weight: Font.DemiBold
+	                                elide: Text.ElideRight
+	                                maximumLineCount: 1
+	                                Layout.maximumWidth: 140
+	                                Layout.minimumWidth: 0
+	                            }
 
-                            Text {
-                                text: root.ssid
-                                color: theme.text
-                                font.family: theme.fontFamily
-                                font.pixelSize: 12
-                                font.weight: Font.DemiBold
-                                elide: Text.ElideRight
-                                maximumLineCount: 1
-                                Layout.maximumWidth: 140
-                                Layout.minimumWidth: 0
-                            }
-                        }
+	                            EinkSymbol {
+	                                // Nerd Font Material Design: nf-md-wifi_strength_1 (f091f)
+	                                symbol: String.fromCodePoint(0xF091F)
+	                                fallbackSymbol: "wifi"
+	                                fallbackIconName: "network-wireless-signal-excellent-symbolic"
+	                                fontFamily: theme.iconFontFamily
+	                                fontFamilyFallback: theme.iconFontFamilyFallback
+	                                color: theme.text
+	                                size: 14
+	                                iconOpacity: 0.95
+	                                Layout.alignment: Qt.AlignVCenter
+	                            }
+	                        }
 
 			                        MouseArea {
 			                            anchors.fill: parent
